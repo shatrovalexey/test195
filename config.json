@@ -1,0 +1,26 @@
+{
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "database": "test195",
+    "user": "postgres",
+    "password": "f2ox9erm",
+    "schema": "public"
+  },
+  "app": {
+    "name": "Resource Management API",
+    "version": "1.0.0",
+    "debug": true,
+    "secret_key": "your-super-secret-key-change-in-production-12345",
+    "algorithm": "HS256"
+  },
+  "jwt": {
+    "access_token_expire_minutes": 30,
+    "refresh_token_expire_days": 7,
+    "algorithm": "HS256",
+    "token_type": "Bearer"
+  },
+  "security": {
+    "password_hash_algorithm": "sha1"
+  }
+}

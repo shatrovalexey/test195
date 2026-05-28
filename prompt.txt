@@ -1,0 +1,47 @@
+Ты — эксперт по FastAPI и PostgreSQL. Напиши полностью рабочий бэкенд на Python 3.11 со следующей функциональностью:
+
+Сущности:
+- Пользователь: id (автоинкремент), full_name (string), email (unique, валидация), password_hash (SHA1 с солью), registered_at, updated_at, is_admin (bool, default false), is_blocked (bool, default false)
+- Ресурс: id (SHA1 hash, primary key), created_at, updated_at, metadata (JSONB, произвольные данные)
+- Права доступа: id, user_id (FK), resource_id (FK), permission_type (read/write/delete/manage), granted_by, granted_at, expires_at (может быть null), is_active
+
+Функционал:
+- Регистрация, логин (JWT access + refresh токены), обновление access токена, логаут
+- Пользователь может просматривать и редактировать свой профиль
+- Администратор может: просматривать всех пользователей, редактировать любого (включая is_admin, is_blocked), удалять пользователей (кроме себя)
+- Любой авторизованный может создать ресурс (получает все права на него)
+- Доступ к ресурсу: только если есть право read (или админ)
+- Редактирование ресурса: только с правом write/manage или админ
+- Удаление ресурса: только с правом manage или админ
+- Выдача и отзыв прав на ресурс: только с правом manage
+- Администратор имеет доступ ко всем ресурсам без проверки прав
+
+Требования к коду:
+- Асинхронный (async/await) с asyncpg
+- JWT с HS256 (секретный ключ из config.json)
+- Автоматическое создание таблиц при запуске
+- Админ по умолчанию: admin@example.com / admin123
+- Swagger документация (/docs)
+- Обработка всех ошибок с правильными HTTP статусами
+- CORS middleware
+- Все запросы к БД в отдельном загрузчике или файле
+
+Структура проекта:
+main.py (точка входа, lifespan с инициализацией JWT и БД)
+database.py (подключение к PostgreSQL из config.json, пул соединений)
+schemas.py (Pydantic модели для всех эндпоинтов)
+auth.py (AuthManager с методами authenticate, create_tokens, refresh_token)
+dependencies.py (get_current_user, get_current_admin_user)
+routers/auth.py (регистрация, логин, рефреш, логаут, /me)
+routers/users.py (CRUD пользователей с проверкой админа)
+routers/resources.py (CRUD ресурсов и управление правами)
+utils/security.py (hash_password, verify_password, generate_resource_id, JWT функции)
+config.json (database: host, port, database, user, password; jwt: secret_key, algorithm, access_expire_minutes, refresh_expire_days)
+
+Дополнительно:
+- Скрипт generate_fake_data.py (создаёт 50+ пользователей, 100+ ресурсов, случайные права) с использованием Faker
+- README.md с инструкцией по установке, настройке config.json, запуску и примерами curl
+- requirements.txt (fastapi, uvicorn, asyncpg, pydantic, python-multipart, pyjwt, email-validator, faker)
+- Код должен быть чистым, без синтаксических ошибок, готовым к копированию и запуску
+
+Предоставь полное содержимое всех файлов. Убедись, что код корректно обрабатывает asyncio, правильно использует asyncpg (с пулом), и все эндпоинты защищены JWT.

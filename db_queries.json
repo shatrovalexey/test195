@@ -1,0 +1,54 @@
+{
+  "users": {
+    "create_table": "CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, full_name VARCHAR(255) NOT NULL, email VARCHAR(255) UNIQUE NOT NULL, password_hash CHAR(40) NOT NULL, registered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL, updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL, is_admin BOOLEAN DEFAULT FALSE NOT NULL, is_blocked BOOLEAN DEFAULT FALSE NOT NULL)",
+    "find_by_email": "SELECT * FROM users WHERE email = %s",
+    "find_by_id": "SELECT * FROM users WHERE id = %s",
+    "create": "INSERT INTO users (full_name, email, password_hash) VALUES (%s, %s, %s) RETURNING *",
+    "update": "UPDATE users SET {updates} WHERE id = %s RETURNING *",
+    "delete": "DELETE FROM users WHERE id = %s RETURNING id",
+    "get_all": "SELECT * FROM users ORDER BY id",
+    "check_email_exists": "SELECT id FROM users WHERE email = %s AND id != %s",
+    "check_admin": "SELECT is_admin FROM users WHERE id = %s"
+  },
+  "sessions": {
+    "create_table": "CREATE TABLE IF NOT EXISTS sessions (id CHAR(40) PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, ip_address INET, user_agent TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL, expires_at TIMESTAMP WITH TIME ZONE NOT NULL, last_activity_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL, is_revoked BOOLEAN DEFAULT FALSE NOT NULL)",
+    "create": "INSERT INTO sessions (id, user_id, ip_address, user_agent, expires_at) VALUES (%s, %s, %s, %s, %s) RETURNING *",
+    "find_by_id": "SELECT s.*, u.is_admin, u.is_blocked, u.full_name, u.email FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = %s AND s.is_revoked = FALSE AND s.expires_at > CURRENT_TIMESTAMP",
+    "update_activity": "UPDATE sessions SET last_activity_at = CURRENT_TIMESTAMP WHERE id = %s",
+    "revoke": "UPDATE sessions SET is_revoked = TRUE WHERE id = %s",
+    "revoke_all_user": "UPDATE sessions SET is_revoked = TRUE WHERE user_id = %s AND id != %s",
+    "revoke_all_user_sessions": "UPDATE sessions SET is_revoked = TRUE WHERE user_id = %s",
+    "cleanup_expired": "DELETE FROM sessions WHERE expires_at < CURRENT_TIMESTAMP OR is_revoked = TRUE"
+  },
+  "resources": {
+    "create_table": "CREATE TABLE IF NOT EXISTS resources (id CHAR(40) PRIMARY KEY, created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL, updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL, metadata JSONB)",
+    "create": "INSERT INTO resources (id, metadata) VALUES (%s, %s) RETURNING id, created_at, updated_at, metadata",
+    "find_by_id": "SELECT * FROM resources WHERE id = %s",
+    "update": "UPDATE resources SET metadata = %s WHERE id = %s RETURNING id, created_at, updated_at, metadata",
+    "delete": "DELETE FROM resources WHERE id = %s RETURNING id",
+    "get_all_admin": "SELECT * FROM resources ORDER BY created_at DESC",
+    "get_user_resources": "SELECT DISTINCT r.id, r.created_at, r.updated_at, r.metadata FROM resources r JOIN resource_permissions rp ON r.id = rp.resource_id WHERE rp.user_id = %s AND rp.is_active = TRUE AND (rp.expires_at IS NULL OR rp.expires_at > CURRENT_TIMESTAMP) ORDER BY r.created_at DESC"
+  },
+  "permissions": {
+    "create_table": "CREATE TABLE IF NOT EXISTS resource_permissions (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, resource_id CHAR(40) NOT NULL REFERENCES resources(id) ON DELETE CASCADE, permission_type VARCHAR(50) NOT NULL, granted_by INTEGER REFERENCES users(id) ON DELETE SET NULL, granted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL, expires_at TIMESTAMP WITH TIME ZONE, is_active BOOLEAN DEFAULT TRUE NOT NULL, UNIQUE(user_id, resource_id, permission_type))",
+    "check_permission": "SELECT 1 FROM resource_permissions WHERE user_id = %s AND resource_id = %s AND permission_type IN (%s, 'manage') AND is_active = TRUE AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)",
+    "grant": "INSERT INTO resource_permissions (user_id, resource_id, permission_type, granted_by, expires_at) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (user_id, resource_id, permission_type) DO UPDATE SET granted_by = EXCLUDED.granted_by, granted_at = CURRENT_TIMESTAMP, expires_at = EXCLUDED.expires_at, is_active = TRUE RETURNING *",
+    "revoke": "UPDATE resource_permissions SET is_active = FALSE WHERE resource_id = %s AND user_id = %s AND permission_type = %s RETURNING id",
+    "get_user_permissions": "SELECT * FROM resource_permissions WHERE user_id = %s AND resource_id = %s"
+  },
+  "indexes": {
+    "create_indexes": [
+      "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
+      "CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)",
+      "CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)",
+      "CREATE INDEX IF NOT EXISTS idx_resources_created_at ON resources(created_at)",
+      "CREATE INDEX IF NOT EXISTS idx_permissions_user_id ON resource_permissions(user_id)",
+      "CREATE INDEX IF NOT EXISTS idx_permissions_resource_id ON resource_permissions(resource_id)"
+    ]
+  },
+  "triggers": {
+    "create_function": "CREATE OR REPLACE FUNCTION update_updated_at_column() RETURNS TRIGGER AS $$ BEGIN NEW.updated_at = CURRENT_TIMESTAMP; RETURN NEW; END; $$ language 'plpgsql'",
+    "create_users_trigger": "DROP TRIGGER IF EXISTS update_users_updated_at ON users; CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()",
+    "create_resources_trigger": "DROP TRIGGER IF EXISTS update_resources_updated_at ON resources; CREATE TRIGGER update_resources_updated_at BEFORE UPDATE ON resources FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()"
+  }
+}
